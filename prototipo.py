@@ -13,12 +13,13 @@ def mostrar_lista_formatada(titulo, itens, max_por_linha=3):
     st.subheader(titulo)
 
     # cria linhas com no máximo 3 elementos
-    for i in range(0, len(itens), max_por_linha):
-        cols = st.columns(max_por_linha)
-        linha = itens[i:i + max_por_linha]
+    if len(itens) > 0:
+        for i in range(0, len(itens), max_por_linha):
+            cols = st.columns(max_por_linha)
+            linha = itens[i:i + max_por_linha]
 
-        for col, item in zip(cols, linha):
-            col.write(f"- {item}")
+            for col, item in zip(cols, linha):
+                col.write(f"- {item}")
 
 def adicionar_slots(df, texto):
     # separa as partes por "/"
@@ -35,7 +36,7 @@ def adicionar_slots(df, texto):
         # fallback: até o primeiro ":"
         nome_linha = linha_raw.split(":")[0].strip()
 
-    slots["Linha"] = nome_linha
+    slots["Linha"] = nome_linha[:-1]
     # regex para capturar "Slot X: valor"
     regex = r"^Slot\s+([^:]+):\s*(.*)$"
 
@@ -112,11 +113,13 @@ df = adicionar_slots(df,texto3)
 df = adicionar_slots(df,texto4)
 df = adicionar_slots(df,texto5)
 df = adicionar_slots(df,texto6)
+df["item"] = df["Linha"].apply(lambda x: "Hack FL 204A-BT 11 - PRA-08" if x.startswith("1") else "Hack FL3B BT9")
 
 st.sidebar.header("🔍 Filtros")
 
 vistorias_disponiveis = ['PIEVT.344.1144916','PIEVT.344.1144917','PIEVT.344.1144918']
 vistoria_selecionada = st.sidebar.selectbox("Vistoria", vistorias_disponiveis, index=0)
+df["vistoria"] = 'PIEVT.344.1144916'
 
 meses_disponiveis = ['25-01','25-02','25-03','25-04','25-05','25-06','25-07','25-08','25-09','25-10','25-11','25-12']
 meses_selecionados = st.sidebar.select_slider(
@@ -125,29 +128,34 @@ meses_selecionados = st.sidebar.select_slider(
     value=(meses_disponiveis[0], meses_disponiveis[-1])
 )
 
+df_meio = df[
+    (df['vistoria'] == vistoria_selecionada)
+]
+
+itens_disponiveis =  sorted(df_meio['item'].unique())
+itens_selecionados = st.sidebar.multiselect("itens", itens_disponiveis)
+
+subitens_disponiveis =  sorted(df_meio['Linha'].unique())
+subitens_selecionados = st.sidebar.multiselect("subitens", subitens_disponiveis)
+
+df_filtrado = df_meio.copy()
+df_filtrado = df_meio[
+    (df_meio['item'].isin(itens_selecionados) if itens_selecionados else pd.Series([True] * len(df_meio))) &
+    (df_meio['Linha'].isin(subitens_selecionados) if subitens_selecionados else pd.Series([True] * len(df_meio)))
+]
 st.title("Vistoria: " + vistoria_selecionada)
-st.markdown("---")
-st.header("Hack FL 204A-BT 11 - PRA-08")
 
-for linha in df['Linha']:
-    if linha.startswith("1"):
+for item in df_filtrado['item'].unique():
+    st.markdown("---")
+    st.header(item)
+    for linha in df_filtrado['Linha'].unique():
+        df_temp = df_filtrado[(df_filtrado['item'] == item) & (df_filtrado['Linha'] == linha)]
+        if df_temp.empty:
+            continue
         st.markdown("")
         st.subheader(linha)
         col1, col2 = st.columns(2)
         with col1:
-            mostrar_lista_formatada("Slots preenchidos:", lista_slots_preenchidos(df, linha))
+            mostrar_lista_formatada("Slots preenchidos:", lista_slots_preenchidos(df_temp, linha))
         with col2:
-            mostrar_lista_formatada("Slots vazios:", lista_slots_vazios(df, linha))
-
-st.markdown("---")
-st.header("Hack FL3B BT9")
-
-for linha in df['Linha']:
-    if linha.startswith("2"):
-        st.markdown("")
-        st.subheader(linha)
-        col1, col2 = st.columns(2)
-        with col1:
-            mostrar_lista_formatada("Slots preenchidos:", lista_slots_preenchidos(df, linha))
-        with col2:
-            mostrar_lista_formatada("Slots vazios:", lista_slots_vazios(df, linha))
+            mostrar_lista_formatada("Slots vazios:", lista_slots_vazios(df_temp, linha))
